@@ -38,6 +38,7 @@ def populateDB(db, rootPath):
 	
 	for root, dirnames, filenames in os.walk(rootPath, topdown=False):
 		jointHash = "";
+		jointSize = 0;
 		for fname in filenames:
 			fullpath = os.path.join(root, fname);
 			try:
@@ -47,6 +48,7 @@ def populateDB(db, rootPath):
 					if len(jointHash) == 0:
 						jointHash = ''.join('0' for x in fileHash);
 					jointHash = mergeHash(jointHash, fileHash);
+					jointSize += sz;
 					c.execute("INSERT INTO Files(MD5Sum, Filename, Path, Size) VALUES(?, ?, ?, ?);", (fileHash, fname, fullpath, sz));
 			except Exception as e:
 				print "Failed on", fullpath, "with error", e;
@@ -54,16 +56,17 @@ def populateDB(db, rootPath):
 		for dname in dirnames:
 			fullpath = os.path.join(root, dname);
 			print "Looking for:", fullpath;
-			c.execute("SELECT MD5Sum FROM Files WHERE Path=:fullpath;", {"fullpath": fullpath});
+			c.execute("SELECT MD5Sum, Size FROM Files WHERE Path=:fullpath;", {"fullpath": fullpath});
 			row = c.fetchone();
 			if not row is None:
 				if len(jointHash) == 0:
 					jointHash = ''.join('0' for x in row[0]);
 				jointHash = mergeHash(jointHash, row[0]);
+				jointSize += row[1];
 			else:
 				print "Not found!";
 		
-		c.execute("INSERT INTO Files(MD5Sum, Filename, Path, Size) VALUES(?, ?, ?, ?);", (jointHash, os.path.split(root)[1], root, 0));
+		c.execute("INSERT INTO Files(MD5Sum, Filename, Path, Size) VALUES(?, ?, ?, ?);", (jointHash, os.path.split(root)[1], root, jointSize));
 	
 	c.close();
 
