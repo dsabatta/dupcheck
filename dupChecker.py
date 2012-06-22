@@ -22,7 +22,7 @@ def initDB(dbName):
 	c = conn.cursor();
 	c.executescript("""
 		DROP TABLE IF EXISTS Files;
-		CREATE TABLE Files(Id INTEGER PRIMARY KEY AUTOINCREMENT, MD5Sum TEXT, Filename TEXT, Path TEXT, Size INT);
+		CREATE TABLE Files(Id INTEGER PRIMARY KEY AUTOINCREMENT, MD5Sum TEXT, Filename TEXT, Path TEXT, Size INT, isDir INT);
 		""");
 	c.close();
 	
@@ -49,7 +49,7 @@ def populateDB(db, rootPath):
 						jointHash = ''.join('0' for x in fileHash);
 					jointHash = mergeHash(jointHash, fileHash);
 					jointSize += sz;
-					c.execute("INSERT INTO Files(MD5Sum, Filename, Path, Size) VALUES(?, ?, ?, ?);", (fileHash, fname, fullpath, sz));
+					c.execute("INSERT INTO Files(MD5Sum, Filename, Path, Size, isDir) VALUES(?, ?, ?, ?, ?);", (fileHash, fname, fullpath, sz, 0));
 			except Exception as e:
 				print "Failed on", fullpath, "with error", e;
 		
@@ -66,9 +66,26 @@ def populateDB(db, rootPath):
 			else:
 				print "Not found!";
 		
-		c.execute("INSERT INTO Files(MD5Sum, Filename, Path, Size) VALUES(?, ?, ?, ?);", (jointHash, os.path.split(root)[1], root, jointSize));
+		c.execute("INSERT INTO Files(MD5Sum, Filename, Path, Size, isDir) VALUES(?, ?, ?, ?, ?);", (jointHash, os.path.split(root)[1], root, jointSize, 1));
 	
 	c.close();
+	
+def findDuplicates(db):
+	c = db.cursor();
+	
+	c.execute("SELECT MD5Sum, COUNT(*) FROM Files WHERE isDir = 1 GROUP BY MD5Sum HAVING COUNT(*) > 1;");
+	dupVals = c.fetchall();
+	
+	for dup in dupVals:
+		dupSum = dup[0];
+		if(len(dupSum) > 0):
+			c.execute("SELECT * FROM Files WHERE MD5Sum = :sum AND isDir = 1;", {"sum":dupSum});
+			rows = c.fetchall();
+			
+			print "Duplicates found with sum: ", dupSum;
+			for item in rows:
+				print item;
+			print "\n";
 
 if __name__ == "__main__":
 	# Check for arguments
@@ -83,10 +100,11 @@ if __name__ == "__main__":
 	# Create database
 	db = initDB(":memory:");
 	populateDB(db, rootPath);
+	findDuplicates(db);
 	
-	c = db.cursor();
-	c.execute("SELECT * FROM Files");
-	rows = c.fetchall();
-	for row in rows:
-		print row;
+#	c = db.cursor();
+#	c.execute("SELECT * FROM Files");
+#	rows = c.fetchall();
+#	for row in rows:
+#		print row;
 
